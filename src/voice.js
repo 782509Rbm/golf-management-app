@@ -1,0 +1,8 @@
+const terms={'triple bogey':3,'double bogey':2,bogey:1,par:0,birdie:-1,eagle:-2};
+const words={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12};
+export function parseVoice(text,players,par){
+ const lower=text.toLowerCase();if(/who (got|won) the hole/.test(lower))return {query:'winner',entries:[]};const found=[];
+ players.forEach(p=>{const names=[p.displayName,p.nickname,p.fullName].filter(Boolean).sort((a,b)=>b.length-a.length);const name=names.find(n=>lower.includes(n.toLowerCase()));if(!name)return;const start=lower.indexOf(name.toLowerCase())+name.length, tail=lower.slice(start).split(/,| and (?=[a-z]+\s)/)[0];let score=null;for(const [term,delta] of Object.entries(terms))if(tail.includes(term)){score=Math.max(1,par+delta);break;}if(!score){const token=tail.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/);if(token)score=+token[1]||words[token[1]];}if(score)found.push({playerId:p.id,name:p.displayName,score});});return {entries:found};
+}
+export function listen({onStart,onText,onError}){const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;if(!Recognition){onError('Speech recognition is not supported in this browser. Use manual entry.');return null;}const rec=new Recognition();rec.lang='en-PH';rec.interimResults=false;rec.maxAlternatives=1;rec.onstart=onStart;rec.onresult=e=>onText(e.results[0][0].transcript);rec.onerror=e=>onError(`Microphone: ${e.error}`);rec.onend=()=>{};rec.start();setTimeout(()=>{try{rec.stop()}catch{}},10000);return rec;}
+export function speak(text,enabled){if(enabled&&'speechSynthesis'in window){speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance(text));}}
