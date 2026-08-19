@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {demoPlayers,demoCourse} from '../src/data.js';
-import {holeNet,holeResult,standings} from '../src/scoring.js';
+import {customAllowance,holeNet,holeResult,standings} from '../src/scoring.js';
 import {calculateBets,settle} from '../src/betting.js';
 import {parseVoice} from '../src/voice.js';
+import {playerRoundSummary,resultAnnouncement,roundResult} from '../src/results.js';
 
 const round=()=>({course:structuredClone(demoCourse),holes:18,playerIds:demoPlayers.map(p=>p.id),playerSnapshots:structuredClone(demoPlayers),handicapMode:'official',customStrokes:{},scores:{},completedHoles:[],status:'active',bets:{hole:100,front:500,back:0,medal:0,birdie:50,sandy:50,medalMode:'net'}});
 test('voice parses multiple names and golf terms',()=>{const out=parseVoice('Sir Dodong made birdie, Attorney Santos five, Jun double bogey, Mark four',demoPlayers,4);assert.deepEqual(out.entries.map(x=>x.score),[3,5,6,4]);});
 test('official handicap produces gross, net and winner',()=>{const r=round();r.scores[1]=Object.fromEntries(demoPlayers.map((p,i)=>[p.id,{score:4+i}]));r.completedHoles=[1];assert.equal(holeNet(r,demoPlayers[0],demoCourse.holes[0],r.scores[1].p1).score,3);assert.equal(holeResult(r,1).winners[0].player.id,'p1');assert.equal(standings(r)[0].player.id,'p1');});
 test('bet ledger balances and settlement minimizes simple debts',()=>{const r=round();r.scores[1]=Object.fromEntries(demoPlayers.map((p,i)=>[p.id,{score:4+i,sandy:i===0}]));r.completedHoles=[1];const result=calculateBets(r);assert.equal(Object.values(result.ledger).reduce((a,b)=>a+b,0),0);assert.ok(result.settlement.length);assert.deepEqual(settle({a:800,b:-500,c:-300}),[{from:'b',to:'a',amount:500},{from:'c',to:'a',amount:300}]);});
+test('custom strokes work in either direction and never benefit the giver',()=>{const r=round();r.handicapMode='custom';r.customAgreements=[{giverId:'p2',receiverId:'p1',strokesPerNine:4}];assert.equal(customAllowance(r,'p1',1),1);assert.equal(customAllowance(r,'p2',1),0);assert.equal(customAllowance(r,'p1',5),0);assert.equal(customAllowance(r,'p1',10),1);r.customAgreements=[{giverId:'p1',receiverId:'p2',strokesPerNine:2}];assert.equal(customAllowance(r,'p1',1),0);assert.equal(customAllowance(r,'p2',1),1);assert.equal(customAllowance(r,'p2',3),0);});
+test('winner margin and announcement come from completed net totals',()=>{const r=round();r.playerSnapshots=r.playerSnapshots.slice(0,2);r.playerIds=r.playerIds.slice(0,2);r.bets.medalMode='net';for(const h of r.course.holes){r.scores[h.number]={p1:{score:h.par},p2:{score:h.par+1}};r.completedHoles.push(h.number);}r.status='complete';const result=roundResult(r);assert.equal(result.winners[0].player.id,'p1');assert.equal(result.margin,16);assert.match(resultAnnouncement(r),/Sir Dodong wins by 16 strokes/);});
+test('historical player summary exposes saved gross, net and result',()=>{const r=round();r.playerSnapshots=r.playerSnapshots.slice(0,2);r.playerIds=r.playerIds.slice(0,2);for(const h of r.course.holes){r.scores[h.number]={p1:{score:4},p2:{score:5}};r.completedHoles.push(h.number);}r.status='complete';const summary=playerRoundSummary(r,'p1');assert.equal(summary.gross,72);assert.equal(summary.net,63);assert.equal(summary.status,'Winner');});

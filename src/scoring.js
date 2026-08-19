@@ -1,6 +1,10 @@
 export const strokesOnHole=(handicap,index)=>Math.floor(handicap/18)+(index<=handicap%18?1:0);
 export function customAllowance(round,playerId,holeNumber){
-  const values=Object.entries(round.customStrokes||{}).filter(([key])=>key.endsWith(`>${playerId}`)).map(([,v])=>+v||0);
+  const agreements=round.customAgreements||[];
+  const modern=agreements.filter(a=>a.receiverId===playerId&&a.giverId!==playerId).map(a=>+a.strokesPerNine||0);
+  // Keep accepting the original "giver>receiver": amount map for saved rounds.
+  const legacy=Object.entries(round.customStrokes||{}).filter(([key])=>key.endsWith(`>${playerId}`)).map(([,v])=>+v||0);
+  const values=[...modern,...legacy];
   const perNine=Math.max(0,...values); if(!perNine)return 0;
   const rank=((holeNumber-1)%9)+1; return rank<=perNine?1:0;
 }

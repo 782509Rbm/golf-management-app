@@ -1,97 +1,46 @@
+import {load,save} from './storage.js';
+import {uid} from './data.js';
+import {standings,holeResult,holeNet,totals} from './scoring.js';
+import {calculateBets} from './betting.js';
+import {listen,parseVoice,speak} from './voice.js';
+import {playerRoundSummary,resultAnnouncement,roundResult} from './results.js';
 
-const icon = (name, size = 20) => {
-  const paths = {
-    home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10M9 20v-6h6v6"/>',
-    flag: '<path d="M6 21V4m0 1c5-3 7 3 12 0v9c-5 3-7-3-12 0"/>',
-    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
-    chart: '<path d="M4 19V9m6 10V5m6 14v-7m6 7H2"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1v.1h-4v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.6-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.1h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.6 1h.1v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
-    mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2m7 9v3m-4 0h8"/>',
-    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
-    chevron: '<path d="m9 18 6-6-6-6"/>',
-    more: '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>',
-    wallet: '<path d="M4 6h15a2 2 0 0 1 2 2v10H4a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3h12v3M16 11h5v4h-5a2 2 0 0 1 0-4Z"/>',
-    spark: '<path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3ZM5 15l.6 2.2L8 18.5l-2.4 1.3L5 22l-.6-2.2L2 18.5l2.4-1.3L5 15Z"/>',
-    trend: '<path d="m3 17 6-6 4 4 8-9m-5 0h5v5"/>',
-    close: '<path d="m6 6 12 12M18 6 6 18"/>'
-  };
-  return `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
-};
-
-const players = [
-  { name: 'Sir Dodong', initials: 'SD', color: '#d48c55', gross: 34, net: 31, thru: 8, toPar: -1, holes: 3, bet: 450, trend: [5,4,4,3,5,4,4,5] },
-  { name: 'Attorney Santos', initials: 'AS', color: '#728fa1', gross: 36, net: 33, thru: 8, toPar: 1, holes: 2, bet: -150, trend: [4,5,4,4,5,5,4,5] },
-  { name: 'Jun', initials: 'JN', color: '#9a7fb0', gross: 38, net: 34, thru: 8, toPar: 3, holes: 2, bet: 100, trend: [5,5,5,4,4,5,5,5] },
-  { name: 'Mark', initials: 'MK', color: '#5e937f', gross: 39, net: 36, thru: 8, toPar: 4, holes: 1, bet: -400, trend: [5,4,6,5,4,5,5,5] }
-];
-
-const nav = [
-  ['home','Overview'], ['flag','Live round'], ['users','Players'], ['chart','Analytics'], ['clock','History']
-];
-
-document.querySelector('#app').innerHTML = `
-  <aside class="sidebar">
-    <a class="brand" href="#"><span class="brand-mark">${icon('flag',25)}</span><span>Caddie</span></a>
-    <nav>${nav.map(([i,l]) => `<button class="nav-item ${l === 'Live round' ? 'active' : ''}">${icon(i)}<span>${l}</span></button>`).join('')}</nav>
-    <div class="side-bottom">
-      <button class="nav-item">${icon('settings')}<span>Settings</span></button>
-      <div class="profile"><div class="avatar small">JD</div><div><strong>Juan Dela Cruz</strong><span>Group admin</span></div><button>${icon('more')}</button></div>
-    </div>
-  </aside>
-  <main>
-    <header class="topbar">
-      <div class="mobile-brand"><span class="brand-mark">${icon('flag',20)}</span><strong>Caddie</strong></div>
-      <div class="round-status"><span class="live-dot"></span><strong>Round in progress</strong><span>•</span><span>Hole 9 of 18</span></div>
-      <div class="top-actions"><button class="icon-btn" aria-label="Notifications">${icon('bell')}</button><button class="course-chip"><span class="course-thumb"></span><span><strong>Southwoods Golf Club</strong><small>Masters · Blue tees</small></span>${icon('chevron',16)}</button></div>
-    </header>
-    <section class="content">
-      <div class="welcome-row"><div><p class="eyebrow">TUESDAY, AUGUST 18</p><h1>Good morning, Juan.</h1><p>You're playing the Masters course with your regular fourball.</p></div><button class="more-btn">${icon('more')}</button></div>
-      <section class="hole-hero">
-        <div class="hole-copy"><div class="hole-label">CURRENT HOLE</div><div class="hole-number">9</div><div class="hole-meta"><span>PAR <b>4</b></span><i></i><span>389 YDS</span><i></i><span>HCP <b>3</b></span></div></div>
-        <div class="hole-art"><div class="fairway"><span class="pin">⚑</span><span class="tee-dot"></span></div></div>
-        <div class="weather"><span>☀</span><div><strong>29°C</strong><small>Light breeze · 8 km/h</small></div></div>
-      </section>
-      <section class="voice-card">
-        <div class="mic-wrap"><button id="micButton" class="mic-button" aria-label="Record score">${icon('mic',27)}</button><span class="pulse"></span></div>
-        <div class="voice-text"><strong id="voiceTitle">Tap to record a score</strong><span id="voiceHint">Try “Sir Dodong made birdie” or “Mark five”</span></div>
-        <div class="soundwave" aria-hidden="true">${[10,18,28,16,34,22,12,25,16,8].map(h=>`<i style="height:${h}px"></i>`).join('')}</div>
-        <button id="manualScore" class="manual-btn">Enter manually</button>
-      </section>
-      <div class="grid">
-        <section class="card leaderboard">
-          <div class="card-head"><div><h2>Live leaderboard</h2><p>Net scores · Through Hole 8</p></div><button>${icon('more')}</button></div>
-          <div class="table-head"><span>PLAYER</span><span>GROSS</span><span>NET</span><span>TO PAR</span><span>HOLES</span></div>
-          ${players.map((p,i)=>`<div class="player-row"><span class="rank">${i+1}</span><span class="avatar" style="--avatar:${p.color}">${p.initials}</span><span class="player-name"><strong>${p.name}</strong><small>HCP ${i===2?'14':i===3?'12':'9'}</small></span><span>${p.gross}</span><span class="net">${p.net}</span><span class="topar ${p.toPar<0?'under':''}">${p.toPar>0?'+':''}${p.toPar}</span><span>${p.holes}</span></div>`).join('')}
-          <button class="view-scorecard">View full scorecard ${icon('chevron',16)}</button>
-        </section>
-        <aside class="right-column">
-          <section class="card hole-result"><div class="card-head"><div><h2>Last hole</h2><p>Hole 8 · Par 5</p></div><span class="winner-tag">WINNER</span></div><div class="winner"><div class="avatar" style="--avatar:#d48c55">SD</div><div><strong>Sir Dodong</strong><span>Birdie · Net 3</span></div><div class="winner-score">4</div></div><p class="result-note">${icon('spark',17)} Won the hole by 1 stroke after handicap.</p></section>
-          <section class="card bets"><div class="card-head"><div><h2>Betting</h2><p>Running totals</p></div><span class="peso">₱100 / hole</span></div>${players.map(p=>`<div class="bet-row"><span><i style="background:${p.color}"></i>${p.name}</span><strong class="${p.bet>0?'positive':'negative'}">${p.bet>0?'+':''}₱${Math.abs(p.bet)}</strong></div>`).join('')}<button class="view-scorecard">View betting details ${icon('chevron',16)}</button></section>
-        </aside>
-      </div>
-    </section>
-  </main>
-  <div class="mobile-nav">${nav.slice(0,4).map(([i,l])=>`<button class="${l==='Live round'?'active':''}">${icon(i,19)}<span>${l==='Live round'?'Round':l}</span></button>`).join('')}</div>
-  <div id="modal" class="modal" aria-hidden="true"><div class="modal-card"><button class="modal-close">${icon('close')}</button><p class="eyebrow">HOLE 9</p><h2>Enter scores</h2><div class="score-inputs">${players.map(p=>`<label><span><i style="background:${p.color}"></i>${p.name}</span><div><button class="minus">−</button><input value="4" inputmode="numeric" aria-label="${p.name} score"><button class="plus">+</button></div></label>`).join('')}</div><button class="save-score">Save hole scores</button></div></div>
-`;
-
-const micButton = document.querySelector('#micButton');
-micButton.addEventListener('click', () => {
-  const listening = micButton.classList.toggle('listening');
-  document.querySelector('#voiceTitle').textContent = listening ? 'Listening…' : 'Tap to record a score';
-  document.querySelector('#voiceHint').textContent = listening ? 'Say a player name and score' : 'Try “Sir Dodong made birdie” or “Mark five”';
-  document.querySelector('.soundwave').classList.toggle('moving', listening);
-});
-
-const modal = document.querySelector('#modal');
-const setModal = open => { modal.classList.toggle('open', open); modal.setAttribute('aria-hidden', String(!open)); };
-document.querySelector('#manualScore').addEventListener('click', () => setModal(true));
-document.querySelector('.modal-close').addEventListener('click', () => setModal(false));
-modal.addEventListener('click', e => { if (e.target === modal) setModal(false); });
-document.querySelectorAll('.score-inputs label').forEach(label => {
-  const input = label.querySelector('input');
-  label.querySelector('.minus').onclick = () => input.value = Math.max(1, Number(input.value)-1);
-  label.querySelector('.plus').onclick = () => input.value = Number(input.value)+1;
-});
-document.querySelector('.save-score').addEventListener('click', () => setModal(false));
+const BETS=[0,10,30,50,100,150,200];
+let state=load(), view=state.activeRound?'live':'setup', selectedHistory=null, playerView=null, historyPlayer='', historyMonth='';
+const app=document.querySelector('#app');
+const name=p=>p.displayName||p.nickname||p.fullName;
+const initials=p=>name(p).split(/\s+/).map(x=>x[0]).slice(-2).join('').toUpperCase();
+const pairKey=(a,b)=>[a,b].sort().join('|');
+const money=n=>`${n<0?'−':'+'}₱${Math.abs(n)}`;
+function persist(){save(state);}
+function nav(){return `<header class="topbar"><a class="brand">⚑ <span>Caddie</span></a><nav>${[['setup','New round'],['live','Live round'],['players','Players'],['history','History']].map(([id,label])=>`<button data-view="${id}" class="${view===id?'active':''}">${label}</button>`).join('')}</nav></header>`;}
+function shell(content){app.innerHTML=`${nav()}<main class="content">${content}</main>`;app.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;selectedHistory=null;render();});}
+function setupView(){
+ const course=state.courses[0], active=state.players.filter(p=>p.active!==false);
+ const selected=active.filter(p=>p._selected!==false).slice(0,4); if(selected.length<2)active.slice(0,2).forEach(p=>p._selected=true);
+ const pairs=[];for(let i=0;i<selected.length;i++)for(let j=i+1;j<selected.length;j++){const a=selected[i],b=selected[j],saved=state.agreements[pairKey(a.id,b.id)]||{giverId:a.id,receiverId:b.id,strokesPerNine:0};pairs.push({a,b,saved});}
+ shell(`<section class="page-head"><p class="eyebrow">ROUND SETUP</p><h1>Set up today's barkada</h1><p>Choose players, fair strokes, and quick bet amounts.</p></section>
+ <section class="card pad"><h2>Players</h2><div class="chips">${active.map(p=>`<label class="check-chip"><input type="checkbox" data-player="${p.id}" ${p._selected!==false?'checked':''}>${name(p)}</label>`).join('')}</div></section>
+ <section class="card pad"><div class="section-title"><div><h2>Custom Barkada strokes</h2><p>Direction and strokes are independent for every pair.</p></div></div><div class="agreements">${pairs.map(({a,b,saved})=>`<article class="agreement" data-pair="${pairKey(a.id,b.id)}"><strong>${name(a)} ↔ ${name(b)}</strong><div class="agreement-fields"><label>Giver<select class="giver"><option value="${a.id}" ${saved.giverId===a.id?'selected':''}>${name(a)}</option><option value="${b.id}" ${saved.giverId===b.id?'selected':''}>${name(b)}</option></select></label><label>Receiver<input class="receiver" readonly value="${name(saved.giverId===a.id?b:a)}" data-id="${saved.giverId===a.id?b.id:a.id}"></label><label>Strokes / nine<input class="strokes" type="number" min="0" max="9" value="${saved.strokesPerNine||0}"></label></div><label class="save-default"><input type="checkbox"> Save as new default</label></article>`).join('')}</div></section>
+ <section class="card pad"><h2>Bet amounts</h2><p>₱0 disables a bet.</p>${[['hole','Per hole'],['front','Front nine'],['back','Back nine'],['medal','Medal / overall'],['birdie','Birdie'],['sandy','Sandy par']].map(([key,label])=>`<fieldset class="bet-field"><legend>${label}</legend><div class="amounts">${BETS.map(n=>`<label><input type="radio" name="${key}" value="${n}" ${n===0?'checked':''}><span>₱${n}</span></label>`).join('')}</div></fieldset>`).join('')}</section><button id="start" class="primary sticky-action">START ROUND</button>`);
+ document.querySelectorAll('[data-player]').forEach(x=>x.onchange=()=>{state.players.find(p=>p.id===x.dataset.player)._selected=x.checked;render();});
+ document.querySelectorAll('.giver').forEach(sel=>sel.onchange=()=>{const card=sel.closest('.agreement'),ids=card.dataset.pair.split('|'),receiver=ids.find(id=>id!==sel.value),p=state.players.find(x=>x.id===receiver);card.querySelector('.receiver').value=name(p);card.querySelector('.receiver').dataset.id=receiver;});
+ document.querySelector('#start').onclick=()=>{const ps=state.players.filter(p=>p.active!==false&&p._selected!==false).slice(0,4);if(ps.length<2)return alert('Choose at least two players.');const customAgreements=[];document.querySelectorAll('.agreement').forEach(card=>{const a={giverId:card.querySelector('.giver').value,receiverId:card.querySelector('.receiver').dataset.id,strokesPerNine:Math.max(0,+card.querySelector('.strokes').value||0)};customAgreements.push(a);if(card.querySelector('.save-default input').checked)state.agreements[card.dataset.pair]=a;});const bets=Object.fromEntries(['hole','front','back','medal','birdie','sandy'].map(k=>[k,+document.querySelector(`input[name="${k}"]:checked`).value]));bets.medalMode='net';state.activeRound={id:uid('round'),date:new Date().toISOString(),course:structuredClone(course),holes:course.holeCount,playerIds:ps.map(p=>p.id),playerSnapshots:structuredClone(ps),handicapMode:'custom',customAgreements,bets,scores:{},completedHoles:[],currentHole:1,status:'active'};persist();view='live';render();};
+}
+function livelyHole(r,n){const result=holeResult(r,n);if(!result)return '';if(result.tied)return `Hole ${n} is tied!`;const p=result.winners[0].player,entry=r.scores[n][p.id],hole=r.course.holes[n-1];if(entry.score<hole.par)return `Birdie for ${name(p)}! What a hole!`;return n%2?`${name(p)} gets the hole!`:`${name(p)} takes Hole ${n}!`;}
+function liveView(){const r=state.activeRound;if(!r){view='setup';return setupView();}if(r.status==='complete')return resultsView(r);const n=r.currentHole,h=r.course.holes[n-1],entries=r.scores[n]||{};r.playerSnapshots.forEach(p=>{entries[p.id]??={score:h.par,sandy:false};});r.scores[n]=entries;
+ const rows=standings(r),bets=calculateBets(r);shell(`<section class="hole-banner"><div><small>CURRENT HOLE</small><strong>${n}</strong></div><div><b>PAR ${h.par}</b><span>Handicap index ${h.index}</span></div></section><div id="announcement" class="announcement" aria-live="polite">${r.lastAnnouncement||'Ready for the next hole.'}</div>
+ <section class="voice-card"><button id="mic" class="mic-button" aria-label="Record scores">🎙</button><div><strong id="voiceTitle">Tap to record scores</strong><span id="transcript">Try “Dodong birdie, Raymond five”</span></div></section>
+ <div class="live-grid"><section class="card quick"><div class="section-title"><div><p class="eyebrow">FAST ENTRY</p><h2>Quick Score</h2></div><b>Hole ${n}</b></div>${r.playerSnapshots.map(p=>`<article class="quick-player"><div class="player-label"><span class="avatar" style="--avatar:${p.color}">${initials(p)}</span><strong>${name(p)}</strong><label><input type="checkbox" class="sandy" data-id="${p.id}" ${entries[p.id].sandy?'checked':''}> Sandy</label></div><div class="stepper"><button class="minus" data-id="${p.id}" aria-label="Decrease ${name(p)} score">−</button><input data-score="${p.id}" inputmode="numeric" value="${entries[p.id].score}" aria-label="${name(p)} score"><button class="plus" data-id="${p.id}" aria-label="Increase ${name(p)} score">+</button></div></article>`).join('')}<button id="saveHole" class="primary save-hole">SAVE HOLE</button></section>
+ <aside><section class="card pad"><h2>Live leaderboard</h2><p>Net standings · through ${r.completedHoles.length} holes</p>${rows.map((x,i)=>`<div class="standing"><b>${i+1}. ${name(x.player)}</b><span>Gross ${x.gross} · Net ${x.net}</span><strong>${x.toPar>0?'+':''}${x.toPar}</strong></div>`).join('')}</section><section class="card pad"><h2>Betting</h2>${r.playerSnapshots.map(p=>`<div class="standing"><span>${name(p)}</span><strong class="${bets.ledger[p.id]>=0?'positive':'negative'}">${money(bets.ledger[p.id])}</strong></div>`).join('')}</section></aside></div>`);
+ document.querySelectorAll('.plus,.minus').forEach(b=>b.onclick=()=>{const input=document.querySelector(`[data-score="${b.dataset.id}"]`);input.value=Math.max(1,+input.value+(b.classList.contains('plus')?1:-1));});
+ document.querySelector('#mic').onclick=()=>{const button=document.querySelector('#mic');listen({onStart:()=>{button.classList.add('listening');document.querySelector('#voiceTitle').textContent='Listening…';},onText:(text,meta)=>{document.querySelector('#transcript').textContent=text;const parsed=parseVoice(text,r.playerSnapshots,h.par);parsed.entries.forEach(e=>document.querySelector(`[data-score="${e.playerId}"]`).value=e.score);if(meta.final&&!parsed.entries.length)document.querySelector('#voiceTitle').textContent='No usable score — tap to retry';},onError:m=>{button.classList.remove('listening');document.querySelector('#voiceTitle').textContent=m;},onEnd:()=>button.classList.remove('listening')});};
+ document.querySelector('#saveHole').onclick=()=>{r.playerSnapshots.forEach(p=>{entries[p.id]={score:Math.max(1,+document.querySelector(`[data-score="${p.id}"]`).value||h.par),sandy:document.querySelector(`.sandy[data-id="${p.id}"]`).checked};});if(!r.completedHoles.includes(n))r.completedHoles.push(n);const announcement=livelyHole(r,n);r.lastAnnouncement=announcement;speak(announcement,state.settings.speech);if(n===9){const front=nineAnnouncement(r,1,9,'front nine');r.lastAnnouncement=front;speak(front,state.settings.speech);}if(n===r.holes){r.status='complete';r.finalAnnouncement=resultAnnouncement(r);r.betResults=calculateBets(r);state.history.unshift(structuredClone(r));state.activeRound=r;speak(r.finalAnnouncement,state.settings.speech);}else r.currentHole=n+1;persist();render();};
+}
+function nineAnnouncement(r,start,end,label){const vals=r.playerSnapshots.map(p=>({p,n:r.course.holes.slice(start-1,end).reduce((s,h)=>s+holeNet(r,p,h,r.scores[h.number][p.id]).score,0)}));const low=Math.min(...vals.map(x=>x.n)),wins=vals.filter(x=>x.n===low);return wins.length>1?`And that's the ${label}! We have a tie!`:`And that's the ${label}! ${name(wins[0].p)} wins it!`;}
+function resultsView(r){const result=roundResult(r),bets=r.betResults||calculateBets(r);shell(`<section class="result-hero"><p class="eyebrow">ROUND COMPLETE</p><h1>${result.tied?'Match tied':`${name(result.winners[0].player)} wins!`}</h1><p>${r.finalAnnouncement}</p><button id="repeat" class="primary">🔊 REPEAT ANNOUNCEMENT</button></section><section class="card pad"><h2>Final gross & net</h2>${result.rows.sort((a,b)=>a.net-b.net).map(x=>`<div class="standing"><b>${name(x.player)}</b><span>Gross ${x.gross} · Net ${x.net}</span><strong>${result.winners.some(w=>w.player.id===x.player.id)?result.tied?'TIED':'WINNER':''}</strong></div>`).join('')}</section><section class="card pad"><h2>Settlement</h2>${bets.settlement.length?bets.settlement.map(s=>`<p>${name(r.playerSnapshots.find(p=>p.id===s.from))} pays ${name(r.playerSnapshots.find(p=>p.id===s.to))} <b>₱${s.amount}</b></p>`).join(''):'<p>No payment due.</p>'}</section><button id="done" class="secondary">Back to history</button>`);document.querySelector('#repeat').onclick=()=>speak(r.finalAnnouncement,true);document.querySelector('#done').onclick=()=>{state.activeRound=null;persist();view='history';render();};}
+function historyView(){const rounds=state.history.filter(r=>(!historyPlayer||r.playerIds.includes(historyPlayer))&&(!historyMonth||r.date.slice(0,7)===historyMonth));if(selectedHistory){const r=state.history.find(x=>x.id===selectedHistory);return detailView(r);}shell(`<section class="page-head"><p class="eyebrow">PERFORMANCE ARCHIVE</p><h1>Round History</h1></section><section class="filters"><label>Player<select id="historyPlayer"><option value="">All players</option>${state.players.map(p=>`<option value="${p.id}" ${historyPlayer===p.id?'selected':''}>${name(p)}</option>`).join('')}</select></label><label>Month<input id="historyMonth" type="month" value="${historyMonth}"></label></section><div class="history-list">${rounds.length?rounds.map(r=>{const summary=historyPlayer?playerRoundSummary(r,historyPlayer):null,result=roundResult(r),lead=summary||result?.rows[0];return `<button class="history-card" data-round="${r.id}"><span><b>${new Date(r.date).toLocaleDateString(undefined,{month:'long',day:'numeric',year:'numeric'})}</b><strong>${r.course.name}</strong><small>${r.holes} holes</small></span><span><b>Gross ${lead?.gross??'—'} · Net ${lead?.net??'—'}</b><em>${summary?.status||(result?.tied?'TIED':'WINNER')}</em></span></button>`;}).join(''):'<div class="empty">No rounds match these filters.</div>'}</div>`);historyPlayer=document.querySelector('#historyPlayer').value;document.querySelector('#historyPlayer').onchange=e=>{historyPlayer=e.target.value;render();};document.querySelector('#historyMonth').onchange=e=>{historyMonth=e.target.value;render();};document.querySelectorAll('[data-round]').forEach(b=>b.onclick=()=>{selectedHistory=b.dataset.round;render();});}
+function detailView(r){const result=roundResult(r),bets=r.betResults||calculateBets(r);shell(`<button id="back" class="back">← Round history</button><section class="page-head"><h1>${r.course.name}</h1><p>${new Date(r.date).toLocaleDateString()} · ${r.holes} holes</p></section><section class="card scorecard-wrap"><table><thead><tr><th>Hole</th>${r.course.holes.slice(0,r.holes).map(h=>`<th>${h.number}</th>`).join('')}<th>Out</th><th>In</th><th>Total</th></tr></thead><tbody>${r.playerSnapshots.flatMap(p=>{const gross=r.course.holes.slice(0,r.holes).map(h=>r.scores[h.number]?.[p.id]?.score??'—'),net=r.course.holes.slice(0,r.holes).map(h=>r.scores[h.number]?.[p.id]?holeNet(r,p,h,r.scores[h.number][p.id]).score:'—'),t=totals(r,p);return [`<tr><th>${name(p)} Gross</th>${gross.map(x=>`<td>${x}</td>`).join('')}<td>${gross.slice(0,9).reduce((a,b)=>a+(+b||0),0)}</td><td>${gross.slice(9).reduce((a,b)=>a+(+b||0),0)}</td><td><b>${t.gross}</b></td></tr>`,`<tr class="net-row"><th>${name(p)} Net</th>${net.map(x=>`<td>${x}</td>`).join('')}<td>${net.slice(0,9).reduce((a,b)=>a+(+b||0),0)}</td><td>${net.slice(9).reduce((a,b)=>a+(+b||0),0)}</td><td><b>${t.net}</b></td></tr>`]}).join('')}</tbody></table></section><section class="card pad"><h2>Result & settlement</h2><p>${r.finalAnnouncement}</p>${bets.settlement.map(s=>`<p>${name(r.playerSnapshots.find(p=>p.id===s.from))} → ${name(r.playerSnapshots.find(p=>p.id===s.to))}: ₱${s.amount}</p>`).join('')||'<p>No payment due.</p>'}${r.finalAnnouncement?'<button id="repeat" class="secondary">Repeat announcement</button>':''}</section>`);document.querySelector('#back').onclick=()=>{selectedHistory=null;render();};document.querySelector('#repeat')?.addEventListener('click',()=>speak(r.finalAnnouncement,true));}
+function playersView(){const p=state.players.find(x=>x.id===playerView)||state.players[0],items=state.history.filter(r=>r.playerIds.includes(p.id)&&(!historyMonth||r.date.slice(0,7)===historyMonth)).map(r=>({r,s:playerRoundSummary(r,p.id)})),wins=items.filter(x=>x.s.status==='Winner').length,gross=items.map(x=>x.s.gross),net=items.map(x=>x.s.net);shell(`<section class="page-head"><p class="eyebrow">PLAYER PERFORMANCE</p><h1>${name(p)}</h1></section><div class="filters"><label>Player<select id="profilePlayer">${state.players.map(x=>`<option value="${x.id}" ${p.id===x.id?'selected':''}>${name(x)}</option>`).join('')}</select></label><label>Month<input id="historyMonth" type="month" value="${historyMonth}"></label></div><section class="stats">${[['Total rounds',items.length],['Wins',wins],['Win percentage',items.length?`${Math.round(wins/items.length*100)}%`:'—'],['Average gross',gross.length?(gross.reduce((a,b)=>a+b,0)/gross.length).toFixed(1):'—'],['Average net',net.length?(net.reduce((a,b)=>a+b,0)/net.length).toFixed(1):'—'],['Best gross',gross.length?Math.min(...gross):'—']].map(([l,v])=>`<div class="card"><span>${l}</span><strong>${v}</strong></div>`).join('')}</section><section class="card pad"><h2>Recent rounds</h2>${items.map(({r,s})=>`<div class="standing"><span><b>${new Date(r.date).toLocaleDateString()}</b><small>${r.course.name}</small></span><span>Gross ${s.gross} · Net ${s.net}</span><strong>${s.status.replace('Did not win','LOSS')}</strong></div>`).join('')||'<p>No rounds in this period.</p>'}</section>`);document.querySelector('#profilePlayer').onchange=e=>{playerView=e.target.value;render();};document.querySelector('#historyMonth').onchange=e=>{historyMonth=e.target.value;render();};}
+function render(){if(view==='setup')setupView();else if(view==='live')liveView();else if(view==='history')historyView();else playersView();persist();}
+render();
